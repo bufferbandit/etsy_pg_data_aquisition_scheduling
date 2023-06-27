@@ -1,0 +1,9 @@
+secrets.py
+.idea/*
+__pycache__/*
+__pycache__/**
+*__pycache__/**
+**__pycache__/**
+
+geckodriver.log
+chromedriver.log
