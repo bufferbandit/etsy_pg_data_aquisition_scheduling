@@ -14,15 +14,7 @@ def get__listings_by_pool_id(pool_id):
 	ps = db.prepare("select listing_id from cron.listing_pool_lookup where pool_id=$1::int")
 	return ps(pool_id)
 
+def get__update_count_by_listing_id(listing_id):
+	ps = db.prepare("select updated_count from cron.listings where listing_id=$1::int")
+	return ps(listing_id)
 
-
-
-# get_pool_candidates
-
-# ...table pools
-
-# add candidates to pool
-
-# schedule a pool
-
-# pool refresh count

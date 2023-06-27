@@ -138,6 +138,7 @@ def insert_update_pool_update_count(pool_id):
 		"""
 		UPDATE cron.pool
 		SET pool_update_count = pool_update_count + 1
-		WHERE pool_id = $1::int;
+		WHERE pool_id = $1::int
+		RETURNING pool_update_count;
 		""")
 	return ps(pool_id)

@@ -2,6 +2,7 @@ from connection import db
 
 
 def create_table__request_batch():
+	# todo, also add a request type column to here (new, update)
 	res = db.prepare("""
 	CREATE TABLE IF NOT EXISTS request_batches (
 		id SERIAL PRIMARY KEY,

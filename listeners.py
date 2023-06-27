@@ -49,7 +49,6 @@ def new_job_run_details_listener(notification):
 
 
 def update_listing_request_listener(notification):
-	print("Update request received", notification)
 	# process a listings pool update request
 	# 1. Receive the pool id
 	channel, payload, pid = notification
@@ -57,10 +56,34 @@ def update_listing_request_listener(notification):
 
 	# 2. Get the list of ids by the pool id
 	listings_for_pool_id = [listing_tuple[0] for listing_tuple in get__listings_by_pool_id(pool_id)]
-	print(listings_for_pool_id)
 
 	# 3. Send a request to update the ids all at once
-	# 4. Receive the results and insert them into the listings
-	# 5. Increment the pool_update_count
+	res = client.getListingsByListingIds(listing_ids=str(listings_for_pool_id)[1:-1])
+
+	# 4. Add a new row to the request_batch table to signify a new request has been made
+	sql_res = insert_into_request_batches()
+	request_batch_id = sql_res[0][0]
+
+	print("Update request received for pool: ", pool_id, " for #", str(len(listings_for_pool_id)), " listings")
+
+	# 5. Receive the results and insert them into the listings
+	for request_batch_insertion_id, updated_listing in enumerate(res["results"]):
+		# Get the request times count, which represents the time the listing was requested
+		get__update_count_by_listing_id_query = get__update_count_by_listing_id(updated_listing["listing_id"])
+		try:
+			insert_into_listings(
+				listing_item=updated_listing,
+				request_batch_id=request_batch_id,
+				request_batch_insertion_id=request_batch_insertion_id,
+				updated_count=get__update_count_by_listing_id_query[0][0] + 1
+			)
+			print("Item successfully updated")
+		except UniqueError as e:
+			print("Item has strangely enough already been updated: ", e.details["detail"])
+			continue
+
+	# 6. Increment the pool update count
 	insert_update_pool_update_count(pool_id)
+
+
 
