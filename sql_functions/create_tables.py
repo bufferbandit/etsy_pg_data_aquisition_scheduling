@@ -6,7 +6,8 @@ def create_table__request_batch():
 	res = db.prepare("""
 	CREATE TABLE IF NOT EXISTS request_batches (
 		id SERIAL PRIMARY KEY,
-		requested_at TIMESTAMPTZ DEFAULT NOW()
+		requested_at TIMESTAMPTZ DEFAULT NOW(),
+		type TEXT DEFAULT NULL
 	);
 	""")
 	return res()

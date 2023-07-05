@@ -1,4 +1,6 @@
 from postgresql.exceptions import UniqueError
+
+from sql_functions.client_invokable_functions import invokable__unschedule_task
 from sql_functions.get_tables import *
 from sql_functions.insertions import *
 from client import client
@@ -9,19 +11,25 @@ from utils import process_insertion_trigger_notification
 
 def new_listing_request_listener(notification):
 	channel, payload, pid = notification
-	# print("A new listing request has been send", payload)
+
+	# If we reached the max listings then unschedule the new listings schedule
+	if payload == "TARGET_MAX_LISTINGS_REACHED":
+		invokable__unschedule_task("get_new_listings_request")
+		print("Stop command received, unscheduling get new listings")
+		return
+
 
 	# Get the latest 100 listings active
 	res = client.findAllListingsActive(limit=100, sort_on="created", sort_order="desc")
 	count, results = res["count"], res["results"]
 
-	print(f"Request made: {count=}")
+	print(f"New request made: {count=}")
 
 	# Insert the count into the total_listings_count
 	insert_into_total_listings_count(count)
 
 	# Add a new row to the request_batch table to signify a new request has been made
-	sql_res = insert_into_request_batches()
+	sql_res = insert_into_request_batches("new_request")
 	request_batch_id = sql_res[0][0]
 
 	# insert the results
@@ -61,10 +69,10 @@ def update_listing_request_listener(notification):
 	res = client.getListingsByListingIds(listing_ids=str(listings_for_pool_id)[1:-1])
 
 	# 4. Add a new row to the request_batch table to signify a new request has been made
-	sql_res = insert_into_request_batches()
+	sql_res = insert_into_request_batches("update_request")
 	request_batch_id = sql_res[0][0]
 
-	print("Update request received for pool: ", pool_id, " for #", str(len(listings_for_pool_id)), " listings")
+	print("Update request received for pool: ", pool_id, " for ", str(len(listings_for_pool_id)), " listings")
 
 	# 5. Receive the results and insert them into the listings
 	for request_batch_insertion_id, updated_listing in enumerate(res["results"]):
@@ -77,7 +85,7 @@ def update_listing_request_listener(notification):
 				request_batch_insertion_id=request_batch_insertion_id,
 				updated_count=get__update_count_by_listing_id_query[0][0] + 1
 			)
-			print("Item successfully updated")
+			# print("Item successfully updated")
 		except UniqueError as e:
 			print("Item has strangely enough already been updated: ", e.details["detail"])
 			continue

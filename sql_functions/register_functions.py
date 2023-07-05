@@ -9,7 +9,9 @@ def register__function_encode_var_as_json_and_base64():
 		RETURNS text AS $$
 		DECLARE
 			json_text text := to_json(input_value);
-			base64_text text := encode(json_text::bytea, 'base64');
+			base64_text text := json_text; 
+			-- This b64 encode somehow is broken and has to 
+			-- be disabled for the time being encode(json_text::bytea, 'base64');
 		BEGIN
 			RETURN base64_text;
 		END;
@@ -52,16 +54,22 @@ def register__get_pool_candidates():
 			
 			WITH numbered_items AS (
 					SELECT
-						l.listing_id,
+						listing.listing_id,
 						ROW_NUMBER() OVER (ORDER BY request_batch_id ASC, requested_at ASC) AS row_num,
 						CEILING(ROW_NUMBER() OVER (ORDER BY request_batch_id) / 100.0) AS candidate_pool_id2
 					FROM
-						cron.listings l
+						cron.listings listing
 					LEFT JOIN
-    					cron.listing_pool_lookup p ON l.listing_id = p.listing_id
+    					cron.listing_pool_lookup pool ON listing.listing_id = pool.listing_id
 					WHERE 
-						-- Check if the listing_id is not in the pool
-						p.listing_id IS NULL
+						-- Check if the listing_id is not in an existing pool already
+						-- pool.listing_id IS NULL
+						-- pool.pool_id IS NULL
+						NOT EXISTS (
+							SELECT 1
+							FROM cron.listing_pool_lookup
+							WHERE listing_id = listing.listing_id
+						)
 				)
 			SELECT
 				candidate_pool_id2 as candidate_pool_id,
@@ -98,7 +106,7 @@ def register__materialize_pools():
 	# Get the candidate pools
 	candidate_pools = execute("SELECT * FROM get_candidate_pools()")
 
-	# Create prepared statement for insersion
+	# Create prepared statement for insertion
 	insert_into_listing_pool_lookup = prepare("INSERT INTO cron.listing_pool_lookup(pool_id, listing_id) VALUES ($1, $2)", ["int", "int"])
 	insert_into_pool = prepare("INSERT INTO cron.pool(pool_id, pool_update_target) VALUES ($1, $2)", ["int", "int"])
 
@@ -106,8 +114,6 @@ def register__materialize_pools():
 	get_highest_pool_id_query = execute("SELECT COALESCE(MAX(pool_id), 0) + 1 FROM cron.listing_pool_lookup")
 	get_highest_pool_id  = int(get_highest_pool_id_query[0]["?column?"])
 	
-		
-
 	materialized_pools_ids = []
 
 	# Loop through candidate pools
@@ -192,11 +198,110 @@ def register__check_if_pool_is_filled_and_unschedule():
 		
 		# You'd think that this will get executed after insertion so the number 
 		#  should be what they are but apparently not
-		if pool_update_count > pool_update_target:
+		if pool_update_count >= pool_update_target:
 			ps = prepare("SELECT cron.unschedule($1)", ["text"])
 			execute(ps, [pool_schedule_name])
 			execute("SELECT pg_notify('watch_pool_filled', 'pool finished target reached: %s')" % str(pool_id))
 		$$
 		LANGUAGE plpython3u;
+	""")
+	return ps()
+
+
+def register__unschedule_all_jobs():
+	ps = db.prepare("""
+	-- call unschedule_all_jobs()
+	CREATE OR REPLACE PROCEDURE unschedule_all_jobs() AS
+	$$
+	DECLARE
+	  job_row RECORD;
+	BEGIN
+	  -- unschedule all jobs
+	  FOR job_row IN SELECT jobname FROM cron.job LOOP
+		-- Generate and execute the unschedule function dynamically
+		EXECUTE format('SELECT cron.unschedule(%L)', job_row.jobname);
+	  END LOOP;
+	END $$ LANGUAGE plpgsql;
+	""")
+	return ps()
+
+def register__cleanup_previous_run():
+	ps = db.prepare("""
+	-- call cleanup_previous_run()
+	CREATE OR REPLACE PROCEDURE cleanup_previous_run() AS
+	$$
+	BEGIN
+	  -- delete the pool tab	le
+	  DELETE FROM cron.pool;
+	
+	  -- delete the listing pool lookup table
+	  DELETE FROM cron.listing_pool_lookup; 
+	  
+	  -- delete run history table
+	  DELETE FROM cron.job_run_details;
+	
+	  -- unschedule all jobs
+	  CALL unschedule_all_jobs();
+	END $$ LANGUAGE plpgsql;
+	""")
+	return ps()
+
+
+def register__count_unique_listings():
+	ps = db.prepare("""
+	CREATE OR REPLACE FUNCTION count_unique_listings() RETURNS INT AS $$
+	DECLARE
+    	unique_listing_count INT;
+	BEGIN
+		SELECT COUNT(DISTINCT listing_id) INTO unique_listing_count
+		FROM cron.listings;
+	RETURN unique_listing_count;
+	END $$ LANGUAGE plpgsql;
+	""")
+	return ps()
+
+
+def register__get_updated_times_groups():
+	ps = db.prepare("""
+	CREATE OR REPLACE FUNCTION get_highest_updated_count_counts()
+		RETURNS TABLE (
+			highest_updated_count INT,
+			count_of_highest_updated_count INT
+		)
+		AS $$
+		BEGIN
+			RETURN QUERY
+				SELECT 
+					highest_updated_count2::INT AS highest_updated_count, 
+					COUNT(*)::INT AS count_of_highest_updated_count
+				FROM (
+					SELECT listing_id, MAX(updated_count) AS highest_updated_count2
+					FROM cron.listings
+					GROUP BY listing_id
+				) AS subquery
+				GROUP BY highest_updated_count2
+				ORDER BY highest_updated_count2 DESC;
+		END;
+	$$ LANGUAGE plpgsql;	
+	""")
+	return ps()
+
+
+def register__get_unique_listing_groups():
+	ps = db.preapre("""
+	CREATE OR REPLACE FUNCTION get_unique_listing_groups()
+		RETURNS TABLE(count INT, unique_count_groups INT) AS $$
+	BEGIN
+		RETURN QUERY
+		SELECT count2::INT as count, COUNT(*)::INT AS unique_count_groups
+		FROM (
+			SELECT listing_id, updated_count, COUNT(*) AS count2
+			FROM cron.listings
+			GROUP BY listing_id, updated_count
+		) AS subquery
+		GROUP BY count
+		ORDER BY unique_count_groups DESC;
+	END;
+	$$ LANGUAGE plpgsql;
 	""")
 	return ps()

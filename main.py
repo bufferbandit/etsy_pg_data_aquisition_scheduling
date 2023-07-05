@@ -7,7 +7,8 @@ from listeners import *
 from utils import *
 
 
-def setup_sql(LISTINGS_POOL_UPDATE_PATTERN):
+def setup_sql():
+	global LISTINGS_POOL_UPDATE_PATTERN
 	# register functions
 	register__function_encode_var_as_json_and_base64()
 	register__function_notify_for_newly_inserted_row()
@@ -16,6 +17,9 @@ def setup_sql(LISTINGS_POOL_UPDATE_PATTERN):
 	register__get_pool_candidates()
 	register__function_process_newly_inserted_listing()
 	register__materialize_pools()
+	register__unschedule_all_jobs()
+	register__cleanup_previous_run()
+	register__count_unique_listings()
 
 	# create tables
 	create_table__request_batch()
@@ -69,18 +73,26 @@ def setup_sql(LISTINGS_POOL_UPDATE_PATTERN):
 if __name__ == "__main__":
 
 
-	refresh_count_target = 7
+	target_max_listings = 2000
+	refresh_count_target = 2 * 7
 	LISTINGS_REQUEST_INTERVAL = "10 seconds"
-	LISTINGS_POOL_UPDATE_PATTERN = "5 seconds"
-	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"
+	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"  # 5 minutes
 
-	from client import client
+	# LISTINGS_POOL_UPDATE_PATTERN = "5 seconds"
+	# LISTINGS_POOL_UPDATE_PATTERN = "*/10 * * * *"
+	# LISTINGS_POOL_UPDATE_PATTERN = "0 */2 * * *"  # 2 hours
+	LISTINGS_POOL_UPDATE_PATTERN = "*/30 * * * *"  # 30 minutes
 
-	print(client.ping())
+
+	try:
+		from client import client
+		print(client.ping())
+	except ConnectionRefusedError:
+		exit("Error: RPC Server not started")
 
 	print(db.prepare("SHOW search_path;")())
 
-	setup_sql(LISTINGS_POOL_UPDATE_PATTERN)
+	setup_sql()
 	time.sleep(4)
 
 	print(db.proc("version()")())
@@ -90,7 +102,9 @@ if __name__ == "__main__":
 			schedule_name="get_new_listings_request",
 			schedule_pattern=LISTINGS_REQUEST_INTERVAL,
 			notification_channel="watch_get_new_listings_request",
-			notification_message="GET_NEW_ITEMS_REQUEST"
+			notification_message="GET_NEW_ITEMS_REQUEST",
+			notification_stop_message="TARGET_MAX_LISTINGS_REACHED",
+			target_max_listings=target_max_listings,
 		)
 
 
@@ -98,3 +112,5 @@ if __name__ == "__main__":
 	finally:
 		invokable__unschedule_task("get_new_listings_request")
 		print("Unscheduled")
+
+

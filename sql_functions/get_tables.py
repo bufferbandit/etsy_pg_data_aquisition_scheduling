@@ -15,6 +15,5 @@ def get__listings_by_pool_id(pool_id):
 	return ps(pool_id)
 
 def get__update_count_by_listing_id(listing_id):
-	ps = db.prepare("select updated_count from cron.listings where listing_id=$1::int")
+	ps = db.prepare("select MAX(updated_count) from cron.listings where listing_id=$1::int")
 	return ps(listing_id)
-

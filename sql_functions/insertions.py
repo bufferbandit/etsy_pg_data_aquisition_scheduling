@@ -1,6 +1,7 @@
 import json
 from random import randint
 from connection import db
+from postgresql.exceptions import InternalError
 
 
 
@@ -9,9 +10,9 @@ def insert_into_total_listings_count(count):
 	return ps(count)
 
 
-def insert_into_request_batches():
-	ps = db.prepare("""INSERT INTO cron.request_batches DEFAULT VALUES RETURNING id;""")
-	return ps()
+def insert_into_request_batches(_type):
+	ps = db.prepare("""INSERT INTO cron.request_batches VALUES (DEFAULT,DEFAULT, $1::text) RETURNING id;""")
+	return ps(_type)
 
 def insert_into_listings(listing_item, request_batch_id, request_batch_insertion_id, updated_count=1):
 	ps = db.prepare("""
@@ -134,11 +135,15 @@ def insert_into_listings(listing_item, request_batch_id, request_batch_insertion
 
 
 def insert_update_pool_update_count(pool_id):
-	ps = db.prepare(
-		"""
-		UPDATE cron.pool
-		SET pool_update_count = pool_update_count + 1
-		WHERE pool_id = $1::int
-		RETURNING pool_update_count;
-		""")
-	return ps(pool_id)
+	try:
+		ps = db.prepare(
+			"""
+			UPDATE cron.pool
+			SET pool_update_count = pool_update_count + 1
+			WHERE pool_id = $1::int
+			RETURNING pool_update_count;
+			""")
+		return ps(pool_id)
+	except InternalError as e:
+		print("The pool trigger went of and threw an exception.\n"
+			  "Perhapse (already) unscheduled pool is tried to be removed? ")
