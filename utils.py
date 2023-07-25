@@ -1,7 +1,9 @@
 import base64
+import builtins
 import json
 import threading
 import time
+from datetime import datetime
 
 from connection import db
 
@@ -51,3 +53,7 @@ def process_insertion_trigger_notification(notification):
 	return channel, b64_decoded_json,pid
 
 
+
+def log_print(*args, **kwargs):
+	now = datetime.now()
+	builtins.print(now, " | ", *args, **kwargs)

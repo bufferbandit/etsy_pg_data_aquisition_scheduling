@@ -1,3 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
+
+from jsonrpclib import ProtocolError
 from postgresql.exceptions import UniqueError
 
 from sql_functions.client_invokable_functions import invokable__unschedule_task
@@ -9,49 +12,91 @@ from utils import process_insertion_trigger_notification
 
 
 
-def new_listing_request_listener(notification):
+def new_listing_request_listener(notification,
+								 target_max_listings,
+								 results_in_request,
+								 max_threads):
+
+
+	# pool = ThreadPoolExecutor(max_workers=max_threads)
+
 	channel, payload, pid = notification
 
 	# If we reached the max listings then unschedule the new listings schedule
 	if payload == "TARGET_MAX_LISTINGS_REACHED":
 		invokable__unschedule_task("get_new_listings_request")
-		print("Stop command received, unscheduling get new listings")
+		log_print("Stop command received, unscheduling get new listings")
 		return
 
 
-	# Get the latest 100 listings active
-	res = client.findAllListingsActive(limit=100, sort_on="created", sort_order="desc")
-	count, results = res["count"], res["results"]
 
-	print(f"New request made: {count=}")
+	paginated_request_id = insert_into_request_batches("paginated_request_overarching")[0][0]
+	all_results = []
 
-	# Insert the count into the total_listings_count
-	insert_into_total_listings_count(count)
+	tasks = []
 
-	# Add a new row to the request_batch table to signify a new request has been made
-	sql_res = insert_into_request_batches("new_request")
-	request_batch_id = sql_res[0][0]
+	def wrapper(offset, limit):
 
-	# insert the results
-	for request_batch_insertion_id,result in enumerate(results):
-		try:
-			insert_into_listings(
-				listing_item=result,
-				request_batch_id=request_batch_id,
-				request_batch_insertion_id=request_batch_insertion_id,
-				updated_count=1
-			)
-			# print(f"Row successfully inserted {result['listing_id']}")
-		except UniqueError as e:
-			# print("Unique error: ", e.details["detail"])
-			continue
+		client_retries = 3
+		for count in range(client_retries):
+			try:
+				res = client.findAllListingsActive(offset=offset, limit=limit, sort_on="created", sort_order="desc")
+				break
+			except ProtocolError as e:
+				if "Remote end closed connection without response" in str(e):
+					print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
+					continue
+
+
+		# unpackoo
+		count, results = res["count"], res["results"]
+		log_print(f"New request made: {offset=}, {limit=} {len(results)=}, etsy_count={count}")
+
+		# append result to all results
+		all_results.append(results)
+
+		# Insert the count into the total_listings_count
+		insert_into_total_listings_count(count)
+
+		# Add a new row to the request_batch table to signify a new request has been made
+		request_batch_id = insert_into_request_batches("new_singular_request")[0][0]
+
+
+		# insert the results
+		for request_batch_insertion_id, result in enumerate(results):
+			try:
+				insert_into_listings(
+					listing_item=result,
+					request_batch_id=request_batch_id,
+					request_batch_insertion_id=request_batch_insertion_id,
+					updated_count=1,
+					offset=offset,
+					paginated_request_id=paginated_request_id
+				)
+				log_print(f"Row successfully inserted {result['listing_id']}")
+			except UniqueError as e:
+				log_print("Unique error: ", e.details["detail"])
+				continue
+		return results
+
+
+	####
+
+	for offset in range(0, int(target_max_listings/results_in_request), results_in_request):
+		# task = pool.submit(wrapper, limit=results_in_request, offset=offset)
+		# tasks.append(task)
+		wrapper(offset, results_in_request)
+
+	thread_results = [task.result() for task in tasks]
+
 
 
 
 
 def new_job_run_details_listener(notification):
 	# channel, payload, pid = process_insertion_trigger_notification(notification)
-	# print("A new job has been inserted/started: ", channel, payload)
+	# channel, payload, pid = notification
+	# log_print("A new job has been inserted/started: ", channel, payload)
 	pass
 
 
@@ -66,13 +111,25 @@ def update_listing_request_listener(notification):
 	listings_for_pool_id = [listing_tuple[0] for listing_tuple in get__listings_by_pool_id(pool_id)]
 
 	# 3. Send a request to update the ids all at once
-	res = client.getListingsByListingIds(listing_ids=str(listings_for_pool_id)[1:-1])
+	client_retries = 3
+
+	for count in range(client_retries):
+		try:
+			res = client.getListingsByListingIds(listing_ids=str(listings_for_pool_id)[1:-1])
+			break
+		except ProtocolError as e:
+			if "Remote end closed connection without response" in str(e):
+				print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
+				continue
+
+
+
 
 	# 4. Add a new row to the request_batch table to signify a new request has been made
 	sql_res = insert_into_request_batches("update_request")
 	request_batch_id = sql_res[0][0]
 
-	print("Update request received for pool: ", pool_id, " for ", str(len(listings_for_pool_id)), " listings")
+	log_print("Update request received for pool: ", pool_id, " for ", str(len(listings_for_pool_id)), " listings")
 
 	# 5. Receive the results and insert them into the listings
 	for request_batch_insertion_id, updated_listing in enumerate(res["results"]):
@@ -85,9 +142,9 @@ def update_listing_request_listener(notification):
 				request_batch_insertion_id=request_batch_insertion_id,
 				updated_count=get__update_count_by_listing_id_query[0][0] + 1
 			)
-			# print("Item successfully updated")
+			# log_print("Item successfully updated")
 		except UniqueError as e:
-			print("Item has strangely enough already been updated: ", e.details["detail"])
+			log_print("Item has strangely enough already been updated: ", e.details["detail"])
 			continue
 
 	# 6. Increment the pool update count

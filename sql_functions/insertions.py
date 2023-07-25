@@ -3,6 +3,7 @@ from random import randint
 from connection import db
 from postgresql.exceptions import InternalError
 
+from utils import log_print
 
 
 def insert_into_total_listings_count(count):
@@ -14,7 +15,8 @@ def insert_into_request_batches(_type):
 	ps = db.prepare("""INSERT INTO cron.request_batches VALUES (DEFAULT,DEFAULT, $1::text) RETURNING id;""")
 	return ps(_type)
 
-def insert_into_listings(listing_item, request_batch_id, request_batch_insertion_id, updated_count=1):
+def insert_into_listings(listing_item, request_batch_id, request_batch_insertion_id,
+						 updated_count=1, offset=-1, paginated_request_id=-1):
 	ps = db.prepare("""
 	INSERT INTO listings VALUES (
 		$1::numeric ,  
@@ -72,6 +74,8 @@ def insert_into_listings(listing_item, request_batch_id, request_batch_insertion
 		$53::numeric,
 		$54::numeric,
 		$55::numeric,
+		$56::numeric,
+		$57::numeric,
 		default
 	);
 	""")
@@ -130,7 +134,9 @@ def insert_into_listings(listing_item, request_batch_id, request_batch_insertion
 			listing_item["views"],
 			updated_count,
 			request_batch_id,
-			request_batch_insertion_id
+			request_batch_insertion_id,
+			offset,
+			paginated_request_id,
 	)
 
 
@@ -145,5 +151,4 @@ def insert_update_pool_update_count(pool_id):
 			""")
 		return ps(pool_id)
 	except InternalError as e:
-		print("The pool trigger went of and threw an exception.\n"
-			  "Perhapse (already) unscheduled pool is tried to be removed? ")
+		log_print("The pool trigger went off and threw an exception. \n		Perhapse (already) unscheduled pool is tried to be removed? ")

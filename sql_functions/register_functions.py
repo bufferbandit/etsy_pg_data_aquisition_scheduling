@@ -95,13 +95,13 @@ def register__get_pool_candidates():
 	return res()
 
 
-def register__materialize_pools():
+def register__materialize_pools(refresh_count_target):
 	res = db.prepare(
 	"""
 	CREATE OR REPLACE FUNCTION materialize_pools() RETURNS INT[] AS $$
 	from plpy import execute, info, prepare
 	
-	POOL_UPDATE_TARGET = 7
+	POOL_UPDATE_TARGET = {refresh_count_target}
 
 	# Get the candidate pools
 	candidate_pools = execute("SELECT * FROM get_candidate_pools()")
@@ -138,7 +138,7 @@ def register__materialize_pools():
 			
 	return materialized_pools_ids
 	$$ LANGUAGE plpython3u;
-	""")
+	""".format(refresh_count_target=refresh_count_target))
 	return res()
 
 
@@ -261,7 +261,7 @@ def register__count_unique_listings():
 	return ps()
 
 
-def register__get_updated_times_groups():
+def register__get_highest_updated_count_counts():
 	ps = db.prepare("""
 	CREATE OR REPLACE FUNCTION get_highest_updated_count_counts()
 		RETURNS TABLE (
@@ -288,7 +288,7 @@ def register__get_updated_times_groups():
 
 
 def register__get_unique_listing_groups():
-	ps = db.preapre("""
+	ps = db.prepare("""
 	CREATE OR REPLACE FUNCTION get_unique_listing_groups()
 		RETURNS TABLE(count INT, unique_count_groups INT) AS $$
 	BEGIN

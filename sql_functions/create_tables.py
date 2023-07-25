@@ -81,9 +81,10 @@ def create_table__responses():
 	  updated_count numeric,
 	  request_batch_id integer REFERENCES request_batches (id),
 	  request_batch_insertion_id numeric,
+	  request_offset numeric,
+	  paginated_request_id numeric,
 	  requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-
+	
 	  ---------
 	  PRIMARY KEY (listing_id, updated_count)
 	);

@@ -1,8 +1,6 @@
 import postgresql
 from connection import db
-
-
-
+from utils import log_print
 
 
 def invokable__schedule_notification(schedule_name, schedule_pattern, notification_channel,
@@ -44,7 +42,7 @@ def invokable__schedule_notification(schedule_name, schedule_pattern, notificati
 			target_max_listings
 		)
 
-	# print(s)
+	# log_print(s)
 	ps = db.prepare(s)
 	return ps()
 

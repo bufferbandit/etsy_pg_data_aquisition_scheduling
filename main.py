@@ -1,3 +1,5 @@
+from functools import partial
+
 from sql_functions.register_triggers import *
 from sql_functions.register_functions import *
 from sql_functions.client_invokable_functions import *
@@ -8,7 +10,7 @@ from utils import *
 
 
 def setup_sql():
-	global LISTINGS_POOL_UPDATE_PATTERN
+	global LISTINGS_POOL_UPDATE_PATTERN,target_max_listings,max_threads,refresh_count_target, client_retries
 	# register functions
 	register__function_encode_var_as_json_and_base64()
 	register__function_notify_for_newly_inserted_row()
@@ -16,10 +18,12 @@ def setup_sql():
 	register__materialize_candidate_pools_and_schedule_pool_update_request_notifs(LISTINGS_POOL_UPDATE_PATTERN)
 	register__get_pool_candidates()
 	register__function_process_newly_inserted_listing()
-	register__materialize_pools()
+	register__materialize_pools(refresh_count_target)
 	register__unschedule_all_jobs()
 	register__cleanup_previous_run()
 	register__count_unique_listings()
+	register__get_highest_updated_count_counts()
+	register__get_unique_listing_groups()
 
 	# create tables
 	create_table__request_batch()
@@ -59,24 +63,32 @@ def setup_sql():
 			"watch_pool",
 		],
 		{
-			"watch_get_new_listings_request": new_listing_request_listener,
+			"watch_get_new_listings_request": partial(new_listing_request_listener,
+													  target_max_listings=target_max_listings,
+													  results_in_request=results_in_request,
+													  max_threads=max_threads),
 			"watch_update_listings_pool_request": update_listing_request_listener,
 			"watch_job_run_details": new_job_run_details_listener,
-			"watch_pool": lambda notify: print("New pool added"),
-			"watch_pool_filled": lambda notify: print("Pool filled!!!!"),
+			"watch_pool": lambda notify: log_print("New pool added"),
+			"watch_pool_filled": lambda notify: log_print("Pool filled!!!!"),
 			"default": lambda notification: ...
 		}
 	)
-	print("Listeners started")
+	log_print("Listeners started")
 
 
 if __name__ == "__main__":
 
+	max_threads = 10
 
-	target_max_listings = 2000
-	refresh_count_target = 2 * 7
-	LISTINGS_REQUEST_INTERVAL = "10 seconds"
+	target_max_listings = 100000
+	results_in_request = 100
+	refresh_count_target = 1
+	client_retries = 5 # TODO: Actually use this!!
+	# LISTINGS_REQUEST_INTERVAL = "3 seconds"
+	# LISTINGS_REQUEST_INTERVAL = "*/1 * * * *"  # 1 minute
 	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"  # 5 minutes
+	LISTINGS_REQUEST_INTERVAL = "*/15 * * * *"  # 15 minutes
 
 	# LISTINGS_POOL_UPDATE_PATTERN = "5 seconds"
 	# LISTINGS_POOL_UPDATE_PATTERN = "*/10 * * * *"
@@ -86,16 +98,16 @@ if __name__ == "__main__":
 
 	try:
 		from client import client
-		print(client.ping())
+		log_print(client.ping())
 	except ConnectionRefusedError:
 		exit("Error: RPC Server not started")
 
-	print(db.prepare("SHOW search_path;")())
+	log_print(db.prepare("SHOW search_path;")())
 
 	setup_sql()
 	time.sleep(4)
 
-	print(db.proc("version()")())
+	log_print(db.proc("version()")())
 
 	try:
 		res = invokable__schedule_notification(
@@ -111,6 +123,6 @@ if __name__ == "__main__":
 		while 1: pass
 	finally:
 		invokable__unschedule_task("get_new_listings_request")
-		print("Unscheduled")
+		log_print("Unscheduled")
 
 
