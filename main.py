@@ -70,7 +70,7 @@ def setup_sql():
 			"watch_update_listings_pool_request": update_listing_request_listener,
 			"watch_job_run_details": new_job_run_details_listener,
 			"watch_pool": lambda notify: log_print("New pool added"),
-			"watch_pool_filled": lambda notify: log_print("Pool filled!!!!"),
+			"watch_pool_filled": lambda notify: log_print(notify[1]),
 			"default": lambda notification: ...
 		}
 	)
@@ -81,14 +81,14 @@ if __name__ == "__main__":
 
 	max_threads = 10
 
-	target_max_listings = 100000
+	target_max_listings = 40000 #100000
 	results_in_request = 100
-	refresh_count_target = 1
-	client_retries = 5 # TODO: Actually use this!!
-	# LISTINGS_REQUEST_INTERVAL = "3 seconds"
+	refresh_count_target = 0 # TODO: Set it to something actually useful
+	client_retries = 5 # TODO: Actually use this in more places!!
+	LISTINGS_REQUEST_INTERVAL = "10 seconds"
 	# LISTINGS_REQUEST_INTERVAL = "*/1 * * * *"  # 1 minute
 	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"  # 5 minutes
-	LISTINGS_REQUEST_INTERVAL = "*/15 * * * *"  # 15 minutes
+	# LISTINGS_REQUEST_INTERVAL = "*/15 * * * *"  # 15 minutes
 
 	# LISTINGS_POOL_UPDATE_PATTERN = "5 seconds"
 	# LISTINGS_POOL_UPDATE_PATTERN = "*/10 * * * *"

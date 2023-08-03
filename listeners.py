@@ -82,9 +82,30 @@ def new_listing_request_listener(notification,
 
 	####
 
-	for offset in range(0, int(target_max_listings/results_in_request), results_in_request):
+	"""
+	
+	When we receive a "get new items request", instead of just making 1 request (of 100 items)
+	 we can also specify the number of times we want to make the new items request.
+	Lets take the scenario in which we want for every new request get 10k items. In that case
+	 we should create a loop that does the following:
+	 
+	 	- Loop through times 10k / 100 -> max / results_in_request
+	 	- increment the offset every time, but instead of multiplying it, do it by step size
+			
+			def range(start,stop,step):
+				...
+				
+		   start at 0
+		   stop at target_max_listings
+		   steps of 100 (instead of 1)
+		   
+	"""
+
+	for offset in range(0, target_max_listings, results_in_request):
 		# task = pool.submit(wrapper, limit=results_in_request, offset=offset)
 		# tasks.append(task)
+
+		# Wrapper to actually make the request
 		wrapper(offset, results_in_request)
 
 	thread_results = [task.result() for task in tasks]
