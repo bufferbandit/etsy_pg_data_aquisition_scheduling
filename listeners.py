@@ -1,3 +1,4 @@
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from jsonrpclib import ProtocolError
@@ -33,7 +34,7 @@ def new_listing_request_listener(notification,
 	paginated_request_id = insert_into_request_batches("paginated_request_overarching")[0][0]
 	all_results = []
 
-	tasks = []
+	# tasks = []
 
 	def wrapper(offset, limit):
 
@@ -73,10 +74,12 @@ def new_listing_request_listener(notification,
 					offset=offset,
 					paginated_request_id=paginated_request_id
 				)
-				log_print(f"Row successfully inserted {result['listing_id']}")
+				# log_print(f"Row successfully inserted {result['listing_id']}")
 			except UniqueError as e:
 				log_print("Unique error: ", e.details["detail"])
 				continue
+
+		log_print(f"All rows inserted")
 		return results
 
 
@@ -106,9 +109,10 @@ def new_listing_request_listener(notification,
 		# tasks.append(task)
 
 		# Wrapper to actually make the request
-		wrapper(offset, results_in_request)
+		# wrapper(offset, results_in_request)
+		threading.Thread(target=wrapper, args=(offset,results_in_request)).start()
 
-	thread_results = [task.result() for task in tasks]
+	# thread_results = [task.result() for task in tasks]
 
 
 

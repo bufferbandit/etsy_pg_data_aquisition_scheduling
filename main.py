@@ -85,7 +85,7 @@ if __name__ == "__main__":
 	results_in_request = 100
 	refresh_count_target = 0 # TODO: Set it to something actually useful
 	client_retries = 5 # TODO: Actually use this in more places!!
-	LISTINGS_REQUEST_INTERVAL = "10 seconds"
+	LISTINGS_REQUEST_INTERVAL = "30 seconds"
 	# LISTINGS_REQUEST_INTERVAL = "*/1 * * * *"  # 1 minute
 	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"  # 5 minutes
 	# LISTINGS_REQUEST_INTERVAL = "*/15 * * * *"  # 15 minutes
@@ -93,7 +93,7 @@ if __name__ == "__main__":
 	# LISTINGS_POOL_UPDATE_PATTERN = "5 seconds"
 	# LISTINGS_POOL_UPDATE_PATTERN = "*/10 * * * *"
 	# LISTINGS_POOL_UPDATE_PATTERN = "0 */2 * * *"  # 2 hours
-	LISTINGS_POOL_UPDATE_PATTERN = "*/30 * * * *"  # 30 minutes
+	LISTINGS_POOL_UPDATE_PATTERN = "*/15 * * * *"  # 30 minutes
 
 
 	try:
