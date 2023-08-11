@@ -63,20 +63,40 @@ def new_listing_request_listener(notification,
 
 
 		# insert the results
-		for request_batch_insertion_id, result in enumerate(results):
-			try:
-				insert_into_listings(
-					listing_item=result,
-					request_batch_id=request_batch_id,
-					request_batch_insertion_id=request_batch_insertion_id,
-					updated_count=1,
-					offset=offset,
-					paginated_request_id=paginated_request_id
-				)
-				log_print(f"Row successfully inserted {result['listing_id']}")
-			except UniqueError as e:
-				log_print("Unique error: ", e.details["detail"])
-				continue
+
+		# insert_into_listings_batch(
+		#
+		# 	listing_items=results,
+		# 	request_batch_id=request_batch_id,
+		# 	request_batch_insertion_id=-1,
+		# 	updated_count=1,
+		# 	offset=offset,
+		# 	paginated_request_id=paginated_request_id
+		#
+		# )
+
+		insert_into_listings_threaded(results, request_batch_id, paginated_request_id=paginated_request_id)
+
+
+
+		# for request_batch_insertion_id, result in enumerate(results):
+		# 	try:
+		# 		insert_into_listings(
+		# 			listing_item=result,
+		# 			request_batch_id=request_batch_id,
+		# 			request_batch_insertion_id=request_batch_insertion_id,
+		# 			updated_count=1,
+		# 			offset=offset,
+		# 			paginated_request_id=paginated_request_id
+		# 		)
+		# 		# log_print(f"Row successfully inserted {result['listing_id']}")
+		# 	except UniqueError as e:
+		# 		log_print("Unique error: ", e.details["detail"])
+		# 		continue
+		# 	except Exception as e:
+		# 		log_print("Other error occured during insersion: ", e)
+		# 		continue
+
 		return results
 
 
@@ -153,20 +173,23 @@ def update_listing_request_listener(notification):
 	log_print("Update request received for pool: ", pool_id, " for ", str(len(listings_for_pool_id)), " listings")
 
 	# 5. Receive the results and insert them into the listings
-	for request_batch_insertion_id, updated_listing in enumerate(res["results"]):
-		# Get the request times count, which represents the time the listing was requested
-		get__update_count_by_listing_id_query = get__update_count_by_listing_id(updated_listing["listing_id"])
-		try:
-			insert_into_listings(
-				listing_item=updated_listing,
-				request_batch_id=request_batch_id,
-				request_batch_insertion_id=request_batch_insertion_id,
-				updated_count=get__update_count_by_listing_id_query[0][0] + 1
-			)
-			# log_print("Item successfully updated")
-		except UniqueError as e:
-			log_print("Item has strangely enough already been updated: ", e.details["detail"])
-			continue
+
+	insert_into_listings_threaded(res["results"], request_batch_id)
+
+	# for request_batch_insertion_id, updated_listing in enumerate(res["results"]):
+	# 	# Get the request times count, which represents the time the listing was requested
+	# 	get__update_count_by_listing_id_query = get__update_count_by_listing_id(updated_listing["listing_id"])
+	# 	try:
+	# 		insert_into_listings(
+	# 			listing_item=updated_listing,
+	# 			request_batch_id=request_batch_id,
+	# 			request_batch_insertion_id=request_batch_insertion_id,
+	# 			updated_count=get__update_count_by_listing_id_query[0][0] + 1
+	# 		)
+	# 		# log_print("Item successfully updated")
+	# 	except UniqueError as e:
+	# 		log_print("Item has strangely enough already been updated: ", e.details["detail"])
+	# 		continue
 
 	# 6. Increment the pool update count
 	insert_update_pool_update_count(pool_id)
