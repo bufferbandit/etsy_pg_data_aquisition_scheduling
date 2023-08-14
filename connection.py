@@ -7,7 +7,7 @@ import postgresql
 
 DB_USERNAME = "postgres"
 DB_NAME = "postgres"
-HOST = "192.168.11.150"
+HOST = "192.168.68.111"
 # HOST = "192.168.114.37"
 PORT = 5432
 SCHEMA = "cron"

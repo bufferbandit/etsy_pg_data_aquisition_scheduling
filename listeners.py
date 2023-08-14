@@ -10,6 +10,8 @@ from sql_functions.insertions import *
 from client import client
 
 from utils import process_insertion_trigger_notification
+from lib.etsy_v3_oauth2_client.lib.jsonrpclib_pelix.jsonrpclib import MultiCall
+
 
 
 
@@ -36,22 +38,27 @@ def new_listing_request_listener(notification,
 
 	# tasks = []
 
-	def wrapper(offset, limit):
 
+
+	def make_requests(offset, limit, rcpserver_batch):
 		client_retries = 3
 		for count in range(client_retries):
 			try:
-				res = client.findAllListingsActive(offset=offset, limit=limit, sort_on="created", sort_order="desc")
+				res = rcpserver_batch.findAllListingsActive(offset=offset, limit=limit, sort_on="created",
+															sort_order="desc")
+				log_print(f"New request made (/batched): {offset=}, {limit=} ")
 				break
 			except ProtocolError as e:
 				if "Remote end closed connection without response" in str(e):
 					print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
 					continue
 
+	def process_response(res):
 
-		# unpackoo
+		# unpack
 		count, results = res["count"], res["results"]
-		log_print(f"New request made: {offset=}, {limit=} {len(results)=}, etsy_count={count}")
+
+		print(f"New response received: {len(results)=}, etsy_count={count}")
 
 		# append result to all results
 		all_results.append(results)
@@ -104,13 +111,27 @@ def new_listing_request_listener(notification,
 		   
 	"""
 
-	for offset in range(0, target_max_listings, results_in_request):
-		# task = pool.submit(wrapper, limit=results_in_request, offset=offset)
-		# tasks.append(task)
+	rpcserver_batch = MultiCall(client)
 
-		# Wrapper to actually make the request
-		# wrapper(offset, results_in_request)
-		threading.Thread(target=wrapper, args=(offset,results_in_request)).start()
+	# Prepare the requests but put them in the batch instead of executing yet
+	for offset in range(0, target_max_listings-results_in_request, results_in_request):
+		make_requests(offset, results_in_request, rpcserver_batch)
+
+	# Execute the batch
+	rpcserver_batch_result = rpcserver_batch()
+	print("Batch executed")
+
+	# process the results
+	for rpcserver_batch_result in rpcserver_batch_result:
+		process_response(rpcserver_batch_result)
+
+
+
+
+	# task = pool.submit(wrapper, limit=results_in_request, offset=offset); tasks.append(task)
+
+	# wrapper(offset, results_in_request)
+	# threading.Thread(target=wrapper, args=(offset,results_in_request)).start()
 
 	# thread_results = [task.result() for task in tasks]
 

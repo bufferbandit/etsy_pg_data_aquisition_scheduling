@@ -81,11 +81,14 @@ if __name__ == "__main__":
 
 	max_threads = 10
 
-	target_max_listings = 40000 #100000
+	target_max_listings = 20000 #100000
 	results_in_request = 100
 	refresh_count_target = 0 # TODO: Set it to something actually useful
 	client_retries = 5 # TODO: Actually use this in more places!!
-	LISTINGS_REQUEST_INTERVAL = "30 seconds"
+
+
+	LISTINGS_REQUEST_INTERVAL = "10 seconds"
+	# LISTINGS_REQUEST_INTERVAL = "30 seconds"
 	# LISTINGS_REQUEST_INTERVAL = "*/1 * * * *"  # 1 minute
 	# LISTINGS_REQUEST_INTERVAL = "*/5 * * * *"  # 5 minutes
 	# LISTINGS_REQUEST_INTERVAL = "*/15 * * * *"  # 15 minutes
