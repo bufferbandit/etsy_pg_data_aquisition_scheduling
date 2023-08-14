@@ -1,7 +1,7 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from jsonrpclib import ProtocolError
+# from jsonrpclib import ProtocolError
 from postgresql.exceptions import UniqueError
 
 from sql_functions.client_invokable_functions import invokable__unschedule_task
@@ -11,6 +11,7 @@ from client import client
 
 from utils import process_insertion_trigger_notification
 from lib.etsy_v3_oauth2_client.lib.jsonrpclib_pelix.jsonrpclib import MultiCall
+from lib.etsy_v3_oauth2_client.lib.jsonrpclib_pelix.jsonrpclib.jsonrpc import ProtocolError
 
 
 
@@ -50,15 +51,21 @@ def new_listing_request_listener(notification,
 				break
 			except ProtocolError as e:
 				if "Remote end closed connection without response" in str(e):
-					print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
+					log_print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
 					continue
+				if "Remote end closed connection without response" in str(e):
+					log_print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
+				if "Offset provided is greater than the maximum offset allowed." in str(e):
+					log_print(f"Max offset succeeded. ")
+
+
 
 	def process_response(res):
 
 		# unpack
 		count, results = res["count"], res["results"]
 
-		print(f"New response received: {len(results)=}, etsy_count={count}")
+		log_print(f"New response received: {len(results)=}, etsy_count={count}")
 
 		# append result to all results
 		all_results.append(results)
@@ -114,12 +121,14 @@ def new_listing_request_listener(notification,
 	rpcserver_batch = MultiCall(client)
 
 	# Prepare the requests but put them in the batch instead of executing yet
-	for offset in range(0, target_max_listings-results_in_request, results_in_request):
+	# for offset in range(0, (target_max_listings - results_in_request), results_in_request):
+	# for offset in range(0, 9900, results_in_request):
+	for offset in range(0, 2, results_in_request):
 		make_requests(offset, results_in_request, rpcserver_batch)
 
 	# Execute the batch
 	rpcserver_batch_result = rpcserver_batch()
-	print("Batch executed")
+	log_print("Batch executed")
 
 	# process the results
 	for rpcserver_batch_result in rpcserver_batch_result:
@@ -165,8 +174,10 @@ def update_listing_request_listener(notification):
 			break
 		except ProtocolError as e:
 			if "Remote end closed connection without response" in str(e):
-				print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
+				log_print("'Remote end closed connection without response' exception occurred, retrying, ", str(count))
 				continue
+			if "Offset provided is greater than the maximum offset allowed." in str(e):
+				log_print(f"Max offset succeeded. ")
 
 
 
