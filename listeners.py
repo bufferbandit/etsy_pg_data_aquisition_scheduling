@@ -123,7 +123,7 @@ def new_listing_request_listener(notification,
 	# Prepare the requests but put them in the batch instead of executing yet
 	# for offset in range(0, (target_max_listings - results_in_request), results_in_request):
 	# for offset in range(0, 9900, results_in_request):
-	for offset in range(0, 2, results_in_request):
+	for offset in range(0, 1, results_in_request):
 		make_requests(offset, results_in_request, rpcserver_batch)
 
 	# Execute the batch
